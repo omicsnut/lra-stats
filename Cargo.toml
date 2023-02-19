@@ -1,8 +1,21 @@
 [package]
 name = "lra-stats"
-version = "0.1.0"
+version = "1.0.0"
+authors = ["Rajeeva Lochan Musunuri raj.musunuri@gmail.com"]
 edition = "2021"
+license = "MIT"
+description = "Quickly compute long read stats for alignment files from stdin"
+readme = "README.md"
+homepage = "https://github.com/omicsnut/lra-stats"
+repository = "https://github.com/omicsnut/lra-stats"
+keywords = ["lr", "longread", "long-read", "ont", "pacbio", "cram", "bam", "alignment"]
+categories = ["command-line-utilities", "science"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+arrow = "33.0.0"
+atty = "0.2.14"
+clap = { version = "4.1.6", features = ["derive"] }
+rust-htslib = { version = "0.40.2", features = ["default", "bzip2", "lzma", "curl", "libdeflate", "s3", "gcs", "static"] }
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
