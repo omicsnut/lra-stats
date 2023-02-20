@@ -14,6 +14,7 @@ pub struct ReadLevelStats {
     pub lengths: Vec<u64>,
     pub map_quals: Vec<u8>,
     pub identities: Vec<f64>,
+    pub sam_flags: Vec<u16>,
 }
 
 pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
@@ -24,13 +25,19 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
         lengths: vec![],
         map_quals: vec![],
         identities: vec![],
+        sam_flags: vec![],
     };
 
-    for read in bam
-        .rc_records()
-        .map(|r| r.expect("unexpected error parsing bam/cram"))
-        .filter(|r| r.flags() & (htslib::BAM_FUNMAP | htslib::BAM_FSECONDARY) as u16 == 0)
-    {
+    for read in bam.rc_records().map(|r| r.unwrap()) {
+        result.sam_flags.push(read.flags());
+        if read.is_unmapped()
+            || read.is_secondary()
+            || read.is_quality_check_failed()
+            || read.is_duplicate()
+        {
+            continue;
+        }
+
         result.identities.push(gap_compressed_identity(&read));
         result.map_quals.push(read.mapq());
         result.lengths.push(read.seq_len() as u64);
@@ -46,14 +53,27 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct SamFlagCounts {
+    pub total: usize,
+    pub mapped: usize,
+    pub qcfail: usize,
+    pub duplicate: usize,
+    pub unmapped: usize,
+    pub primary: usize,
+    pub secondary: usize,
+    pub supplementary: usize,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct AggregateStats {
-    pub num_reads: usize,
+    pub num_pass_reads: usize,
     pub read_length_n50: u64,
     pub bases_yield: u64,
     pub mean_read_length: f64,
     pub median_read_length: f64,
     pub mean_pct_identity: f64,
     pub median_pct_identity: f64,
+    pub sam_flag_counts: SamFlagCounts,
 }
 
 impl ReadLevelStats {
@@ -63,22 +83,68 @@ impl ReadLevelStats {
         }
 
         let identities_sum = self.identities.iter().sum::<f64>();
-        let num_reads = self.read_ids.len();
+        let num_pass_reads = self.read_ids.len();
         let bases_yield = self.lengths.iter().sum::<u64>();
         let read_length_n50 = compute_n50(self.lengths.clone().as_mut(), bases_yield);
-        let mean_read_length = round_to_digit(bases_yield as f64 / num_reads as f64, 2);
+        let mean_read_length = round_to_digit(bases_yield as f64 / num_pass_reads as f64, 2);
         let median_read_length = round_to_digit(compute_median_u64(self.lengths.as_slice()), 2);
-        let mean_pct_identity = round_to_digit(identities_sum / num_reads as f64, 4);
+        let mean_pct_identity = round_to_digit(identities_sum / num_pass_reads as f64, 4);
         let median_pct_identity = round_to_digit(compute_median(self.identities.as_slice()), 4);
 
+        let mut sam_flag_counts = SamFlagCounts {
+            total: 0,
+            mapped: 0,
+            qcfail: 0,
+            duplicate: 0,
+            unmapped: 0,
+            primary: 0,
+            secondary: 0,
+            supplementary: 0,
+        };
+
+        for sam_flag in self.sam_flags.iter() {
+            sam_flag_counts.total += 1;
+
+            let is_qcfail = sam_flag & htslib::BAM_FQCFAIL as u16 != 0;
+            let is_duplicate = sam_flag & htslib::BAM_FDUP as u16 != 0;
+            let is_supplementary = sam_flag & htslib::BAM_FSUPPLEMENTARY as u16 != 0;
+            let is_secondary = sam_flag & htslib::BAM_FSECONDARY as u16 != 0;
+            let is_unmapped = sam_flag & htslib::BAM_FUNMAP as u16 != 0;
+
+            if is_qcfail {
+                sam_flag_counts.qcfail += 1;
+            }
+
+            if is_duplicate {
+                sam_flag_counts.duplicate += 1;
+            }
+
+            if is_supplementary {
+                sam_flag_counts.supplementary += 1;
+            }
+
+            if is_secondary {
+                sam_flag_counts.secondary += 1;
+            } else {
+                sam_flag_counts.primary += 1;
+            }
+
+            if is_unmapped {
+                sam_flag_counts.unmapped += 1
+            } else {
+                sam_flag_counts.mapped += 1;
+            }
+        }
+
         AggregateStats {
-            num_reads,
+            num_pass_reads,
             read_length_n50,
             bases_yield,
             mean_read_length,
             median_read_length,
             mean_pct_identity,
             median_pct_identity,
+            sam_flag_counts,
         }
     }
 
