@@ -193,7 +193,7 @@ impl ReadLevelStats {
 impl AggregateStats {
     pub fn write_as_json(&self, out_path: String) {
         let buffer = File::create(out_path).expect("could not create output file");
-        serde_json::to_writer(&buffer, &self).expect("msg");
+        serde_json::to_writer_pretty(&buffer, &self).expect("msg");
         buffer.sync_all().expect("msg");
     }
 }
