@@ -5,7 +5,7 @@ RUN apt-get update && apt-get --yes upgrade && apt-get install --yes --no-instal
 
 RUN git clone "https://github.com/omicsnut/lra-stats.git" /lra-stats && cd /lra-stats && cargo build --release
 
-FROM rmusunuri/samtools:v1.17-gcloud424
+FROM gcr.io/nygc-comp-s-1856/samtools:v1.17-gcloud424
 LABEL maintainer="Rajeeva Musunuri <rmusunuri@nygenome.org>"
 
 ARG DEBIAN_FRONTEND="noninteractive"
