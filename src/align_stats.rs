@@ -15,6 +15,7 @@ pub struct ReadLevelStats {
     pub map_quals: Vec<u8>,
     pub identities: Vec<f64>,
     pub sam_flags: Vec<u16>,
+    pub pct_duplex_reads: f64,
 }
 
 pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
@@ -26,7 +27,11 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
         map_quals: vec![],
         identities: vec![],
         sam_flags: vec![],
+        pct_duplex_reads: 0.0,
     };
+
+    let mut duplex_read_count = 0;
+    let mut total_read_count = 0;
 
     for read in bam.rc_records().map(|r| r.unwrap()) {
         result.sam_flags.push(read.flags());
@@ -36,6 +41,20 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
             || read.is_duplicate()
         {
             continue;
+        }
+
+        if read
+            .aux(b"dx")
+            .is_ok_and(|dx| (dx == Aux::I8(1)) || (dx == Aux::I16(1)) || (dx == Aux::I32(1)))
+        {
+            duplex_read_count += 1;
+        }
+
+        if read
+            .aux(b"dx")
+            .is_ok_and(|dx| (dx != Aux::I8(-1)) || (dx != Aux::I16(-1)) || (dx != Aux::I32(-1)))
+        {
+            total_read_count += 1;
         }
 
         result.identities.push(gap_compressed_identity(&read));
@@ -48,6 +67,8 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
                 .expect("could not parse read name in bam/cram"),
         );
     }
+
+    result.pct_duplex_reads = 100.0 * (duplex_read_count as f64) / (total_read_count as f64);
 
     result
 }
@@ -73,6 +94,7 @@ pub struct AggregateStats {
     pub median_read_length: f64,
     pub mean_pct_identity: f64,
     pub median_pct_identity: f64,
+    pub pct_duplex_reads: f64,
     pub sam_flag_counts: SamFlagCounts,
 }
 
@@ -90,6 +112,7 @@ impl ReadLevelStats {
         let median_read_length = round_to_digit(compute_median_u64(self.lengths.as_slice()), 2);
         let mean_pct_identity = round_to_digit(identities_sum / num_pass_reads as f64, 4);
         let median_pct_identity = round_to_digit(compute_median(self.identities.as_slice()), 4);
+        let pct_duplex_reads = round_to_digit(self.pct_duplex_reads, 4);
 
         let mut sam_flag_counts = SamFlagCounts {
             total: 0,
@@ -145,6 +168,7 @@ impl ReadLevelStats {
             mean_pct_identity,
             median_pct_identity,
             sam_flag_counts,
+            pct_duplex_reads,
         }
     }
 
