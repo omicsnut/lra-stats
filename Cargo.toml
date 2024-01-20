@@ -1,6 +1,6 @@
 [package]
 name = "lra-stats"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["Rajeeva Lochan Musunuri raj.musunuri@gmail.com"]
 edition = "2021"
 license = "MIT"
