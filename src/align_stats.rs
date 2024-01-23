@@ -15,6 +15,7 @@ pub struct ReadLevelStats {
     pub map_quals: Vec<u8>,
     pub identities: Vec<f64>,
     pub sam_flags: Vec<u16>,
+    pub num_pass_duplex_reads: u64,
     pub pct_duplex_reads: f64,
 }
 
@@ -27,11 +28,12 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
         map_quals: vec![],
         identities: vec![],
         sam_flags: vec![],
+        num_pass_duplex_reads: 0,
         pct_duplex_reads: 0.0,
     };
 
-    let mut duplex_read_count = 0;
-    let mut total_read_count = 0;
+    let mut duplex_read_count: u64 = 0;
+    let mut total_read_count: u64 = 0;
 
     for read in bam.rc_records().map(|r| r.unwrap()) {
         result.sam_flags.push(read.flags());
@@ -43,18 +45,35 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
             continue;
         }
 
-        if read
-            .aux(b"dx")
-            .is_ok_and(|dx| (dx == Aux::I8(1)) || (dx == Aux::I16(1)) || (dx == Aux::I32(1)))
-        {
-            duplex_read_count += 1;
-        }
+        match read.aux(b"dx") {
+            Ok(value) => {
+                if value == Aux::I8(1)
+                    || value == Aux::I16(1)
+                    || value == Aux::I32(1)
+                    || value == Aux::U8(1)
+                    || value == Aux::U16(1)
+                    || value == Aux::U32(1)
+                    || value == Aux::Float(1.0)
+                    || value == Aux::Double(1.0)
+                {
+                    duplex_read_count += 1;
+                    total_read_count += 1;
+                } else if value == Aux::I8(0)
+                    || value == Aux::I16(0)
+                    || value == Aux::I32(0)
+                    || value == Aux::U8(0)
+                    || value == Aux::U16(0)
+                    || value == Aux::U32(0)
+                    || value == Aux::Float(0.0)
+                    || value == Aux::Double(0.0)
+                {
+                    total_read_count += 1;
+                }
+            }
 
-        if read
-            .aux(b"dx")
-            .is_ok_and(|dx| (dx != Aux::I8(-1)) || (dx != Aux::I16(-1)) || (dx != Aux::I32(-1)))
-        {
-            total_read_count += 1;
+            Err(e) => {
+                panic!("Error reading dx aux field: {}", e)
+            }
         }
 
         result.identities.push(gap_compressed_identity(&read));
@@ -68,6 +87,7 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
         );
     }
 
+    result.num_pass_duplex_reads = duplex_read_count;
     result.pct_duplex_reads = 100.0 * (duplex_read_count as f64) / (total_read_count as f64);
 
     result
@@ -88,6 +108,7 @@ pub struct SamFlagCounts {
 #[derive(Serialize, Deserialize)]
 pub struct AggregateStats {
     pub num_pass_reads: usize,
+    pub num_pass_duplex_reads: u64,
     pub read_length_n50: u64,
     pub bases_yield: u64,
     pub mean_read_length: f64,
@@ -161,6 +182,7 @@ impl ReadLevelStats {
 
         AggregateStats {
             num_pass_reads,
+            num_pass_duplex_reads: self.num_pass_duplex_reads,
             read_length_n50,
             bases_yield,
             mean_read_length,
