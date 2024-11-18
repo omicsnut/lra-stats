@@ -1,7 +1,7 @@
 FROM rust:1-slim AS builder
 
-RUN apt-get update && apt-get --yes upgrade && apt-get install --yes --no-install-recommends git cmake make gcc \
-    zlib1g-dev libbz2-dev liblzma-dev libdeflate-dev libcurl4-gnutls-dev libssl-dev libncurses5-dev libreadline-dev
+RUN apt-get update && apt-get --yes upgrade && apt-get install --yes --no-install-recommends git cmake make clang gcc \
+    zlib1g-dev libbz2-dev liblzma-dev libdeflate-dev libcurl4-gnutls-dev libssl-dev libncurses5-dev libreadline-dev libclang-dev
 
 RUN git clone "https://github.com/omicsnut/lra-stats.git" /lra-stats && cd /lra-stats && cargo build --release
 
