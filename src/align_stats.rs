@@ -71,8 +71,8 @@ pub fn extract(bam: &mut bam::Reader) -> ReadLevelStats {
                 }
             }
 
-            Err(e) => {
-                panic!("Error reading dx aux field: {}", e)
+            Err(_) => {
+                total_read_count += 1;
             }
         }
 
